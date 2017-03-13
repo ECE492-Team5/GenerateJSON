@@ -33,7 +33,7 @@ int get_date(char *date_buffer, size_t buffer_size) {
 	struct tm* tm_info;
 	const char format[] = "%Y-%m-%dT%H:%M:%S";
 
-	if (time(&timer) > 0) {
+	if (time(&timer) < 0) {
 #ifdef DEBUG
 		perror("Failed to get current time.");
 #endif
@@ -41,7 +41,7 @@ int get_date(char *date_buffer, size_t buffer_size) {
 	}
 
 	tm_info = localtime(&timer);
-	if (tm_info = NULL) {
+	if (tm_info == NULL) {
 #ifdef DEBUG
 		perror("Failed to derive localtime from current time.");
 #endif
@@ -55,39 +55,51 @@ int get_date(char *date_buffer, size_t buffer_size) {
 	}
 }
 
-int main() {
+//Generates the JSON file and outputs it to current directory
+void generateJSON(int channel, int value) {
 
-	int sensor_1_data = 5;
+    //Buffer to hold the date
+    char date_buffer[30];
+    //Buffer to hold temporary path name
+    char path_buffer_temp[30];
+    //Buffer to hold actual path name
+    char path_buffer[30];
 
-	char date_buffer[30];
-	srand(time(NULL));
-
-	FILE *fp_sensor_1;
-
-	json_object *j_sensor_1_ID_int = json_object_new_int(1);
-
-	get_date(date_buffer);
-
-	json_object *j_sensor_1_obj = json_object_new_object();
-
-	json_object *j_sensor_1_current_int = json_object_new_int(sensor_1_data);
-	json_object *j_sensor_1_unit = json_object_new_string("Amp");
-	json_object *j_date_string = json_object_new_string(date_buffer);
-
-	json_object_object_add(j_sensor_1_obj, "Sensor_ID" , j_sensor_1_ID_int);
-	json_object_object_add(j_sensor_1_obj, "Current" , j_sensor_1_current_int);
-	json_object_object_add(j_sensor_1_obj, "Date" , j_date_string);
-	json_object_object_add(j_sensor_1_obj, "Unit" , j_sensor_1_unit);
-
-	fp_sensor_1 = fopen("./sensors/sensor_1~.json", "w");
-	if (fp_sensor_1 == NULL) {
-		fprintf(stderr, "Can't Open File sensor_1\n");
-		exit(1);
+    //Get the date
+    if (get_date(date_buffer) < 0) {
+#ifdef DEBUG
+		fprintf(stderr, "Failed get_date() while generatingJSON for channel %d", channel);
+#endif
+		exit(EXIT_FAILURE);
 	}
 
-	fprintf(fp_sensor_1, "%s\n",
-		json_object_to_json_string_ext(j_sensor_1_obj, JSON_C_TO_STRING_PRETTY));
-	fclose(fp_sensor_1);
+    //Initialize new libjson JSON object
+    json_object *j_sensor_obj         = json_object_new_object();
+    json_object *j_sensor_value_int   = json_object_new_int(value);
+    json_object *j_sensor_channel_int = json_object_new_int(channel);
+    json_object *j_date_string        = json_object_new_string(date_buffer);
 
-	rename("./sensors/sensor_1~.json", "./sensors/sensor_1.json");
+    //Add the INT and String objects to JSON object
+    json_object_object_add(j_sensor_obj, "Channel", j_sensor_channel_int);
+    json_object_object_add(j_sensor_obj, "Voltage", j_sensor_value_int);
+    json_object_object_add(j_sensor_obj, "Date", j_date_string);
+
+    //Generate path buffers (temp has a ~)
+    snprintf(path_buffer_temp, 30, "./sensor_%d~.json", channel);
+    snprintf(path_buffer, 30, "./sensor_%d.json", channel);
+
+    //All the file IO stuff...
+    FILE *fp_sensor;
+    fp_sensor = fopen(path_buffer, "w");
+    if (fp_sensor == NULL) {
+        fprintf(stderr, "Can't Open File Sensor_%d\n", channel);
+        exit(EXIT_FAILURE);
+    }
+
+    fprintf(fp_sensor, "%s\n",
+        json_object_to_json_string_ext(j_sensor_obj, JSON_C_TO_STRING_PRETTY));
+    fclose(fp_sensor);
+
+    //Rename (This is atomic)
+    rename(path_buffer_temp, path_buffer);
 }
