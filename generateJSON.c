@@ -113,9 +113,46 @@ void generateJSON(int channel, int value) {
 	rename(path_buffer_temp, path_buffer);
 }
 
-void init_generateJSON() {
 
+void init_generateJSON() {
+	pid_t pid;
 	struct sigaction sa;
+
+	// TODO: reference http://stackoverflow.com/a/17955149/6248563
+	// StackOverflow Answer for: Creating a daemon in Linux
+	// Answer By: Pascal Werkl on Jul 30 '13 (Edited: Dec 29 '16)
+	// Accessed by: Satyen Akolkar on Mar 12 '17
+
+	// Fork off the parent process
+	pid = fork();
+
+	if (pid < 0) {
+#ifdef DEBUG
+		fprintf(stdout, "Failed to fork child. Returned PID: %d", pid);
+#endif
+		perror("fork()");
+		exit(EXIT_FAILURE);
+	}
+
+	if (pid > 0) {
+#ifdef DEBUG
+		fprintf(stdout, "Success: child process forked. Killing parent.");
+#endif
+		exit(EXIT_SUCCESS);
+	}
+
+#ifdef DEBUG
+	fprintf(stdout, "Printing from Child. Survived the first forking.");
+#endif
+
+	// create new session with child as leader without a controlling terminal
+	if (setsid() < 0) {
+#ifdef DEBUG
+		fprintf(stdout, "Failed to create new session.");
+#endif
+		perror("setsid()");
+		exit(EXIT_FAILURE);
+	}
 
 	// initialize sigaction struct and signal handling
 	sa.sa_flags = SA_SIGINFO;
@@ -137,6 +174,43 @@ void init_generateJSON() {
 		perror("Failed to setup signal handler for SIGTERM.");
 		exit(EXIT_FAILURE);
 	}
+
+#ifdef DEBUG
+	fprintf(stdout, "Signal handlers set. Starting second forking.");
+#endif
+
+	pid = fork();
+
+	if (pid < 0) {
+#ifdef DEBUG
+		fprintf(stdout, "Failed to fork child. Returned PID: %d", pid);
+#endif
+		perror("fork()");
+		exit(EXIT_FAILURE);
+	}
+
+	if (pid > 0) {
+#ifdef DEBUG
+		fprintf(stdout, "Success: child process forked. Killing parent.");
+#endif
+		exit(EXIT_SUCCESS);
+	}
+
+	//XXX: might need to adjust for proper permissions with created files
+	umask(0);
+	chdir("/");
+}
+
+
+int main() {
+	init_generateJSON();
+
+	while(1) {
+		sleep(20);
+		break;
+	}
+
+	return EXIT_SUCCESS;
 }
 
 static void sig_handler(int signo) {
