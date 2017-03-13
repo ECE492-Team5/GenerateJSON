@@ -19,8 +19,6 @@ Description:
 	is atomic and thread safe.
 */
 
-#define DEBUG
-
 #include <json/json.h>
 #include <stdio.h>
 #include <time.h>
@@ -35,41 +33,84 @@ static volatile sig_atomic_t REREAD_CONFIG = 0;
 static volatile sig_atomic_t GRACEFUL_EXIT = 0;
 
 // FUNCTION SIGNATURES
-int  get_date(char *date_buffer, size_t buffer_size);
-void init_generateJSON();
-void generateJSON(int channel, int value);
+void        init_generateJSON();
+void        generateJSON(int channel, int value);
+void        fork_child_kill_parent();
+void        init_signals();
 static void sig_handler(int signo, siginfo_t *si, void *unused);
+int         get_date(char *date_buffer, size_t buffer_size);
 
-int get_date(char *date_buffer, size_t buffer_size) {
-	int ERR = -1;
 
-	time_t timer;
-	struct tm* tm_info;
-	const char format[] = "%Y-%m-%dT%H:%M:%S";
+int main() {
+	init_generateJSON();
 
-	if (time(&timer) < 0) {
-#ifdef DEBUG
-		perror("Failed to get current time.");
+	while(1) {
+		if (REREAD_CONFIG | GRACEFUL_EXIT) {
+
+		}
+
+		// Read Sensor Value from ADC
+
+		if (REREAD_CONFIG | GRACEFUL_EXIT) {
+
+		}
+
+		// Output Read Value into JSON File
+
+		if (REREAD_CONFIG | GRACEFUL_EXIT) {
+
+		}
+
+#ifdef SLOWREADS
+		sleep(10);
+#else
+		sleep(1);
 #endif
-		return ERR;
 	}
 
-	tm_info = localtime(&timer);
-	if (tm_info == NULL) {
-#ifdef DEBUG
-		perror("Failed to derive localtime from current time.");
-#endif
-		return ERR;
-	}
-
-	if (strftime(date_buffer, buffer_size, format, tm_info) == 0) {
-#ifdef DEBUG
-		perror("Failed to format localtime. Indeterminate Result.");
-#endif
-	}
-	
-	return 0;	
+	return EXIT_SUCCESS;
 }
+
+
+void init_generateJSON() {
+
+	// Reference http://stackoverflow.com/a/17955149/6248563
+	// StackOverflow Answer for: Creating a daemon in Linux
+	// Answer By: Pascal Werkl on Jul 30 '13 (Edited: Dec 29 '16)
+	// Accessed by: Satyen Akolkar on Mar 12 '17
+
+	// Fork off the parent process to run in background
+	fork_child_kill_parent();
+
+	// create new session with child as leader without a controlling terminal
+	if (setsid() < 0) {
+#ifdef DEBUG
+		fprintf(stdout, "Failed to create new session.\n");
+#endif
+		perror("setsid()");
+		exit(EXIT_FAILURE);
+	}
+
+	init_signals();
+
+	// Fork again so that session leader is killed. Can't be reassociated with
+	// a terminal.
+	fork_child_kill_parent();
+
+	//XXX: might need to adjust for proper permissions with created files
+	umask(0);
+	chdir("/");
+
+	int x;
+	for (x = sysconf(_SC_OPEN_MAX); x>=0; x--) {
+		close (x);
+	}
+
+#ifdef DEBUG
+	fprintf(stdout, "Process daemonized.");
+#endif
+}
+
 
 //Generates the JSON file and outputs it to current directory
 void generateJSON(int channel, int value) {
@@ -84,7 +125,7 @@ void generateJSON(int channel, int value) {
 	//Get the date
 	if (get_date(date_buffer, 30) < 0) {
 #ifdef DEBUG
-		fprintf(stderr, "Failed get_date() while generatingJSON for channel %d", channel);
+		fprintf(stdout, "Failed get_date() while generatingJSON for channel %d\n", channel);
 #endif
 		exit(EXIT_FAILURE);
 	}
@@ -120,47 +161,31 @@ void generateJSON(int channel, int value) {
 	rename(path_buffer_temp, path_buffer);
 }
 
-
-void init_generateJSON() {
+void fork_child_kill_parent() {
 	pid_t pid;
-	struct sigaction sa;
-
-	// TODO: reference http://stackoverflow.com/a/17955149/6248563
-	// StackOverflow Answer for: Creating a daemon in Linux
-	// Answer By: Pascal Werkl on Jul 30 '13 (Edited: Dec 29 '16)
-	// Accessed by: Satyen Akolkar on Mar 12 '17
-
-	// Fork off the parent process
 	pid = fork();
 
+	// fork fails parent runs check
 	if (pid < 0) {
 #ifdef DEBUG
-		fprintf(stdout, "Failed to fork child. Returned PID: %d", pid);
+		fprintf(stdout, "Failed to fork child. Returned PID: %d\n", pid);
 #endif
 		perror("fork()");
 		exit(EXIT_FAILURE);
 	}
 
+	// fork succeeds parent runs check
 	if (pid > 0) {
 #ifdef DEBUG
-		fprintf(stdout, "Success: child process forked. Killing parent.");
+		fprintf(stdout, "Success: child process forked. Killing parent.\n");
 #endif
 		exit(EXIT_SUCCESS);
 	}
 
-#ifdef DEBUG
-	fprintf(stdout, "Printing from Child. Survived the first forking.");
-#endif
+	// only child survives till here pid=0 in child
+}
 
-	// create new session with child as leader without a controlling terminal
-	if (setsid() < 0) {
-#ifdef DEBUG
-		fprintf(stdout, "Failed to create new session.");
-#endif
-		perror("setsid()");
-		exit(EXIT_FAILURE);
-	}
-
+void init_signals() {
 	// initialize sigaction struct and signal handling
 	sa.sa_flags = SA_SIGINFO;
 	memset(&sa, 0, sizeof(struct sigaction));
@@ -183,41 +208,8 @@ void init_generateJSON() {
 	}
 
 #ifdef DEBUG
-	fprintf(stdout, "Signal handlers set. Starting second forking.");
+	fprintf(stdout, "Signal handlers set.\n");
 #endif
-
-	pid = fork();
-
-	if (pid < 0) {
-#ifdef DEBUG
-		fprintf(stdout, "Failed to fork child. Returned PID: %d", pid);
-#endif
-		perror("fork()");
-		exit(EXIT_FAILURE);
-	}
-
-	if (pid > 0) {
-#ifdef DEBUG
-		fprintf(stdout, "Success: child process forked. Killing parent.");
-#endif
-		exit(EXIT_SUCCESS);
-	}
-
-	//XXX: might need to adjust for proper permissions with created files
-	umask(0);
-	chdir("/");
-}
-
-
-int main() {
-	init_generateJSON();
-
-	while(1) {
-		sleep(20);
-		break;
-	}
-
-	return EXIT_SUCCESS;
 }
 
 static void sig_handler(int signo, siginfo_t *si, void *unused) {
@@ -237,4 +229,36 @@ static void sig_handler(int signo, siginfo_t *si, void *unused) {
 		default:
 			break;
 	}
+}
+
+
+int get_date(char *date_buffer, size_t buffer_size) {
+	int ERR = -1;
+
+	time_t timer;
+	struct tm* tm_info;
+	const char format[] = "%Y-%m-%dT%H:%M:%S";
+
+	if (time(&timer) < 0) {
+#ifdef DEBUG
+		perror("Failed to get current time.");
+#endif
+		return ERR;
+	}
+
+	tm_info = localtime(&timer);
+	if (tm_info == NULL) {
+#ifdef DEBUG
+		perror("Failed to derive localtime from current time.");
+#endif
+		return ERR;
+	}
+
+	if (strftime(date_buffer, buffer_size, format, tm_info) == 0) {
+#ifdef DEBUG
+		perror("Failed to format localtime. Indeterminate Result.");
+#endif
+	}
+
+	return 0;
 }
