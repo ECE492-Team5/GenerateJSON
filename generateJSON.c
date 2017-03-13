@@ -27,15 +27,18 @@ Description:
 #include <unistd.h>
 
 #include <signal.h>
+#include <sys/stat.h>
+#include <string.h>
 
 // SIGNAL FLAGS
-static volatile sigatomic_t REREAD_CONFIG = 0;
-static volatile sigatomic_t GRACEFUL_EXIT = 0;
+static volatile sig_atomic_t REREAD_CONFIG = 0;
+static volatile sig_atomic_t GRACEFUL_EXIT = 0;
 
 // FUNCTION SIGNATURES
 int  get_date(char *date_buffer, size_t buffer_size);
 void init_generateJSON();
 void generateJSON(int channel, int value);
+static void sig_handler(int signo, siginfo_t *si, void *unused);
 
 int get_date(char *date_buffer, size_t buffer_size) {
 	int ERR = -1;
@@ -64,6 +67,8 @@ int get_date(char *date_buffer, size_t buffer_size) {
 		perror("Failed to format localtime. Indeterminate Result.");
 #endif
 	}
+	
+	return 0;	
 }
 
 //Generates the JSON file and outputs it to current directory
@@ -77,7 +82,7 @@ void generateJSON(int channel, int value) {
 	char path_buffer[30];
 
 	//Get the date
-	if (get_date(date_buffer) < 0) {
+	if (get_date(date_buffer, 30) < 0) {
 #ifdef DEBUG
 		fprintf(stderr, "Failed get_date() while generatingJSON for channel %d", channel);
 #endif
@@ -215,7 +220,7 @@ int main() {
 	return EXIT_SUCCESS;
 }
 
-static void sig_handler(int signo) {
+static void sig_handler(int signo, siginfo_t *si, void *unused) {
 	switch (signo) {
 		case SIGHUP:
 			REREAD_CONFIG = 1;
