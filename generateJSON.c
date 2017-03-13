@@ -26,6 +26,8 @@ Description:
 #include <time.h>
 #include <unistd.h>
 
+#include <signal.h>
+
 // SIGNAL FLAGS
 static volatile sigatomic_t REREAD_CONFIG = 0;
 static volatile sigatomic_t GRACEFUL_EXIT = 0;
