@@ -5,8 +5,8 @@
 
 TARGET = generateJSON
 
-CFLAGS = -static -g -Wall -I /home/debian/hwlib/include -D DEBUG
-LDFLAGS = -g -Wall -ljson
+CFLAGS = -static -g -Wall -D DEBUG
+LDFLAGS = -g -Wall -l json
 CC = gcc
 ARCH = arm
 

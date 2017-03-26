@@ -34,10 +34,13 @@ static volatile sig_atomic_t GRACEFUL_EXIT = 0;
 
 // FUNCTION SIGNATURES
 void        fork_child_kill_parent();
+void        free_memory();
 void        generateJSON(int channel, int value);
+int         get_current(int channel, int millivolts);
 int         get_date(char *date_buffer, size_t buffer_size);
 void        init_signals();
 void        inititalize();
+void        load_config();
 int         read_adc(int channel);
 static void sig_handler(int signo, siginfo_t *si, void *unused);
 
@@ -119,7 +122,7 @@ void inititalize() {
 
 	//XXX: might need to adjust for proper permissions with created files
 	umask(0);
-	chdir("/");
+	//chdir("/");
 
 	int x;
 	for (x = sysconf(_SC_OPEN_MAX); x>=0; x--) {
@@ -205,8 +208,24 @@ void fork_child_kill_parent() {
 	// only child survives till here pid=0 in child
 }
 
+void free_memory() {
+
+}
+
+int get_current(int channel, int millivolts) {
+	return 0;
+}
+
+void load_config() {
+
+}
+
+int read_adc(int channel) {
+	return 0;
+}
+
 void init_signals() {
-	sigaction sa;
+	struct sigaction sa;
 	// initialize sigaction struct and signal handling
 	sa.sa_flags = SA_SIGINFO;
 	memset(&sa, 0, sizeof(struct sigaction));
