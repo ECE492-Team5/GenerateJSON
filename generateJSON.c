@@ -28,6 +28,16 @@ Description:
 #include <sys/stat.h>
 #include <string.h>
 
+// These header files have been copied to /usr/local/include on the board so
+// gcc will automatically find them.
+#include "socal/socal.h"
+#include "socal/hps.h"
+#include "socal/alt_gpio.h"
+
+// The hps_0 header file created with sopc-create-header-file utility.
+// This file is also copied into /usr/local/include on the board.
+#include "hps_0.h"
+
 // SIGNAL FLAGS
 static volatile sig_atomic_t REREAD_CONFIG = 0;
 static volatile sig_atomic_t GRACEFUL_EXIT = 0;
@@ -45,6 +55,11 @@ int         read_adc(int channel);
 static void sig_handler(int signo, siginfo_t *si, void *unused);
 
 #define NUM_CHANNELS 8
+#define NUM_READS 1
+#define HW_REGS_BASE ( ALT_STM_OFST )
+#define HW_REGS_SPAN ( 0x04000000 )
+#define HW_REGS_MASK ( HW_REGS_SPAN - 1 )
+
 
 int main() {
 	int channel = 0;
@@ -214,15 +229,11 @@ void free_memory() {
 }
 
 int get_current(int channel, int millivolts) {
-	return 0;
+	return millivolts;
 }
 
 void load_config() {
 
-}
-
-int read_adc(int channel) {
-	return 0;
 }
 
 void init_signals() {
@@ -272,6 +283,59 @@ static void sig_handler(int signo, siginfo_t *si, void *unused) {
 	}
 }
 
+int read_adc(int channel) {
+
+	void *base;
+        uint32_t *adc_base;
+        int memdevice_fd, value;
+
+	// Open /dev/mem device
+	if( (memdevice_fd = open("/dev/mem", (O_RDWR | O_SYNC))) < 0) {
+			perror("Unable to open \"/dev/mem\".");
+			exit(EXIT_FAILURE);
+	}
+
+	// mmap the HPS registers
+	base = (uint32_t*) mmap(NULL, HW_REGS_SPAN, (PROT_READ | PROT_WRITE), MAP_SHARED, memdevice_fd, HW_REGS_BASE);
+	if(base == MAP_FAILED) {
+			perror("mmap() failed.");
+			close(memdevice_fd);
+			exit(EXIT_FAILURE);
+	}
+
+	// derive adc component base address from base HPS registers
+	adc_base = (uint32_t*) (base + ((ALT_LWFPGASLVS_OFST + ADC_LTC2308_0_BASE) & HW_REGS_MASK));
+
+	// initialize ADC Component's Buffer Size
+	*(adc_base + 0x01) = NUM_READS;
+
+	value = get_adc_value(adc_base, channel);
+
+	// unmap and close /dev/mem
+        if( munmap(base, HW_REGS_SPAN) < 0) {
+            perror("munmap() failed.");
+            close(memdevice_fd);
+            exit(EXIT_FAILURE);
+        }
+
+        close(memdevice_fd);
+
+	return value;
+}
+
+int get_adc_value(uint32_t *adc_base, int channel) {
+
+        // indicate to the adc component to begin reads.
+        *adc_base = (channel << 1) | 0x00;
+        *adc_base = (channel << 1) | 0x01;
+        *adc_base = (channel << 1) | 0x00;
+
+        // wait for component to finish reading
+        usleep(1);
+        while( (*adc_base & 0x01) == 0x00);
+
+        return *(adc_base + 0x01);
+}
 
 int get_date(char *date_buffer, size_t buffer_size) {
 	int ERR = -1;
