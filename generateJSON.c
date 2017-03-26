@@ -51,7 +51,8 @@ int main() {
 	int millivolts = 0;
 
 	// daemonize the program
-	inititalize();
+	// inititalize();
+	chdir("/var/tmp/sensor-json");
 
 	while(1) {
 		if (REREAD_CONFIG) {
@@ -122,7 +123,7 @@ void inititalize() {
 
 	//XXX: might need to adjust for proper permissions with created files
 	umask(0);
-	//chdir("/");
+	chdir("/var/tmp/sensor-json");
 
 	int x;
 	for (x = sysconf(_SC_OPEN_MAX); x>=0; x--) {

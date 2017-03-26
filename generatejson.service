@@ -1,0 +1,13 @@
+[Unit]
+Description=Generates JSON from sensors connected on ADC
+
+[Service]
+ExecStart=/home/nodeserver/GenerateJSON/generateJSON
+Restart=always
+User=nodeserver
+Group=nodeserver
+Environment=PATH=/usr/bin:/usr/local/bin
+WorkingDirectory=/home/nodeserver/GenerateJSON
+
+[Install]
+WantedBy=multi-user.target
