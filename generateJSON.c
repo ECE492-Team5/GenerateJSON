@@ -33,46 +33,66 @@ static volatile sig_atomic_t REREAD_CONFIG = 0;
 static volatile sig_atomic_t GRACEFUL_EXIT = 0;
 
 // FUNCTION SIGNATURES
-void        init_generateJSON();
-void        generateJSON(int channel, int value);
 void        fork_child_kill_parent();
-void        init_signals();
-static void sig_handler(int signo, siginfo_t *si, void *unused);
+void        generateJSON(int channel, int value);
 int         get_date(char *date_buffer, size_t buffer_size);
+void        init_signals();
+void        inititalize();
+int         read_adc(int channel);
+static void sig_handler(int signo, siginfo_t *si, void *unused);
 
+#define NUM_CHANNELS 8
 
 int main() {
-	init_generateJSON();
+	int channel = 0;
+	int millivolts = 0;
+
+	// daemonize the program
+	inititalize();
 
 	while(1) {
-		if (REREAD_CONFIG | GRACEFUL_EXIT) {
+		if (REREAD_CONFIG) {
+			load_config();
+			REREAD_CONFIG = 0;
+		}
 
+		if (GRACEFUL_EXIT) {
+			break;
 		}
 
 		// Read Sensor Value from ADC
+		millivolts = read_adc(channel);
 
-		if (REREAD_CONFIG | GRACEFUL_EXIT) {
-
+		if (GRACEFUL_EXIT) {
+			break;
 		}
 
 		// Output Read Value into JSON File
-
-		if (REREAD_CONFIG | GRACEFUL_EXIT) {
-
+		if (channel < 4) {
+			generateJSON(channel, get_current(channel, millivolts));
+		} else {
+			generateJSON(channel, millivolts);
 		}
 
+		if (GRACEFUL_EXIT) {
+			break;
+		}
 #ifdef SLOWREADS
 		sleep(10);
 #else
 		sleep(1);
 #endif
+
+		channel += 1;
+		channel %= NUM_CHANNELS;
 	}
 
+	free_memory();
 	return EXIT_SUCCESS;
 }
 
 
-void init_generateJSON() {
+void inititalize() {
 
 	// Reference http://stackoverflow.com/a/17955149/6248563
 	// StackOverflow Answer for: Creating a daemon in Linux
@@ -186,6 +206,7 @@ void fork_child_kill_parent() {
 }
 
 void init_signals() {
+	sigaction sa;
 	// initialize sigaction struct and signal handling
 	sa.sa_flags = SA_SIGINFO;
 	memset(&sa, 0, sizeof(struct sigaction));
