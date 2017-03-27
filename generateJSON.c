@@ -24,6 +24,11 @@ Description:
 #include <time.h>
 #include <unistd.h>
 
+#include <fcntl.h>
+#include <error.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+
 #include <signal.h>
 #include <sys/stat.h>
 #include <string.h>
@@ -46,6 +51,7 @@ static volatile sig_atomic_t GRACEFUL_EXIT = 0;
 void        fork_child_kill_parent();
 void        free_memory();
 void        generateJSON(int channel, int value);
+int         get_adc_value(uint32_t *adc_base, int channel);
 int         get_current(int channel, int millivolts);
 int         get_date(char *date_buffer, size_t buffer_size);
 void        init_signals();
@@ -88,9 +94,9 @@ int main() {
 
 		// Output Read Value into JSON File
 		if (channel < 4) {
-			generateJSON(channel, get_current(channel, millivolts));
+			generateJSON(channel + 1, get_current(channel, millivolts));
 		} else {
-			generateJSON(channel, millivolts);
+			generateJSON(channel + 1, millivolts);
 		}
 
 		if (GRACEFUL_EXIT) {
@@ -99,7 +105,7 @@ int main() {
 #ifdef SLOWREADS
 		sleep(10);
 #else
-		sleep(1);
+		usleep(10);
 #endif
 
 		channel += 1;
@@ -168,17 +174,28 @@ void generateJSON(int channel, int value) {
 #endif
 		exit(EXIT_FAILURE);
 	}
+	
+	json_object *j_sensor_obj   = json_object_new_object();
+	json_object *j_sensor_ID    = json_object_new_int(channel);
+	json_object *j_sensor_value = json_object_new_int(value);
+	json_object *j_sensor_unit  = json_object_new_string("V");
+	json_object *j_date_string  = json_object_new_string(date_buffer);
+	json_object_object_add(j_sensor_obj, "Sensor_ID" , j_sensor_ID);
+	json_object_object_add(j_sensor_obj, "Current" , j_sensor_value);
+	json_object_object_add(j_sensor_obj, "Date" , j_date_string);
+	json_object_object_add(j_sensor_obj, "Unit" , j_sensor_unit);
 
+	
 	//Initialize new libjson JSON object
-	json_object *j_sensor_obj         = json_object_new_object();
-	json_object *j_sensor_value_int   = json_object_new_int(value);
-	json_object *j_sensor_channel_int = json_object_new_int(channel);
-	json_object *j_date_string        = json_object_new_string(date_buffer);
+	// json_object *j_sensor_obj         = json_object_new_object();
+	// json_object *j_sensor_value_int   = json_object_new_int(value);
+	// json_object *j_sensor_channel_int = json_object_new_int(channel);
+	// json_object *j_date_string        = json_object_new_string(date_buffer);
 
 	//Add the INT and String objects to JSON object
-	json_object_object_add(j_sensor_obj, "Channel", j_sensor_channel_int);
-	json_object_object_add(j_sensor_obj, "Voltage", j_sensor_value_int);
-	json_object_object_add(j_sensor_obj, "Date", j_date_string);
+	// json_object_object_add(j_sensor_obj, "Channel", j_sensor_channel_int);
+	// json_object_object_add(j_sensor_obj, "Voltage", j_sensor_value_int);
+	// json_object_object_add(j_sensor_obj, "Date", j_date_string);
 
 	//Generate path buffers (temp has a ~)
 	snprintf(path_buffer_temp, 30, "./sensor_%d~.json", channel);
