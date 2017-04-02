@@ -105,7 +105,7 @@ int main() {
 #ifdef SLOWREADS
 		sleep(10);
 #else
-		usleep(10);
+		usleep(1000);
 #endif
 
 		channel += 1;
@@ -167,6 +167,8 @@ void generateJSON(int channel, int value) {
 	//Buffer to hold actual path name
 	char path_buffer[30];
 
+	char* unit_buffer;
+
 	//Get the date
 	if (get_date(date_buffer, 30) < 0) {
 #ifdef DEBUG
@@ -174,11 +176,17 @@ void generateJSON(int channel, int value) {
 #endif
 		exit(EXIT_FAILURE);
 	}
+
+	if(1 <= channel && channel <= 4) {
+		unit_buffer = "mA";
+	} else {
+		unit_buffer = "mV";
+	}
 	
 	json_object *j_sensor_obj   = json_object_new_object();
 	json_object *j_sensor_ID    = json_object_new_int(channel);
 	json_object *j_sensor_value = json_object_new_int(value);
-	json_object *j_sensor_unit  = json_object_new_string("V");
+	json_object *j_sensor_unit  = json_object_new_string(unit_buffer);
 	json_object *j_date_string  = json_object_new_string(date_buffer);
 	json_object_object_add(j_sensor_obj, "Sensor_ID" , j_sensor_ID);
 	json_object_object_add(j_sensor_obj, "Current" , j_sensor_value);
@@ -203,7 +211,7 @@ void generateJSON(int channel, int value) {
 
 	//All the file IO stuff...
 	FILE *fp_sensor;
-	fp_sensor = fopen(path_buffer, "w");
+	fp_sensor = fopen(path_buffer_temp, "w");
 	if (fp_sensor == NULL) {
 		fprintf(stderr, "Can't Open File Sensor_%d\n", channel);
 		exit(EXIT_FAILURE);
