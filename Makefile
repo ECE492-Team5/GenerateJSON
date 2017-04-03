@@ -6,7 +6,7 @@
 TARGET = generateJSON
 
 CFLAGS = -static -g -Wall -D DEBUG
-LDFLAGS = -g -Wall -l json
+LDFLAGS = -g -Wall -l json -lm
 CC = gcc
 ARCH = arm
 

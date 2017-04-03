@@ -33,6 +33,9 @@ Description:
 #include <sys/stat.h>
 #include <string.h>
 
+#include "cjson/cJSON.h"
+#include "cjson/cJSON.c"
+
 // These header files have been copied to /usr/local/include on the board so
 // gcc will automatically find them.
 #include "socal/socal.h"
@@ -44,7 +47,7 @@ Description:
 #include "hps_0.h"
 
 // SIGNAL FLAGS
-static volatile sig_atomic_t REREAD_CONFIG = 0;
+static volatile sig_atomic_t REREAD_CONFIG = 1;
 static volatile sig_atomic_t GRACEFUL_EXIT = 0;
 
 // FUNCTION SIGNATURES
@@ -57,6 +60,7 @@ int         get_date(char *date_buffer, size_t buffer_size);
 void        init_signals();
 void        inititalize();
 void        load_config();
+char*       readFile();
 int         read_adc(int channel);
 static void sig_handler(int signo, siginfo_t *si, void *unused);
 
@@ -66,6 +70,19 @@ static void sig_handler(int signo, siginfo_t *si, void *unused);
 #define HW_REGS_SPAN ( 0x04000000 )
 #define HW_REGS_MASK ( HW_REGS_SPAN - 1 )
 
+#define MIN_VOLTS "min_avg_voltage"
+#define MAX_VOLTS "max_avg_voltage"
+#define MIN_AMPS "min_amperage"
+#define MAX_AMPS "max_amperage"
+#define MULTIPLIER "multiplier"
+#define FILE_CHAR_SIZE 2000
+
+// CONFIG GLOBALS
+double current_max_voltage[4];
+double current_min_voltage[4];
+double current_max_current[4];
+double current_min_current[4];
+double current_multiplier[4];
 
 int main() {
 	int channel = 0;
@@ -80,7 +97,7 @@ int main() {
 			load_config();
 			REREAD_CONFIG = 0;
 		}
-
+		
 		if (GRACEFUL_EXIT) {
 			break;
 		}
@@ -193,18 +210,6 @@ void generateJSON(int channel, int value) {
 	json_object_object_add(j_sensor_obj, "Date" , j_date_string);
 	json_object_object_add(j_sensor_obj, "Unit" , j_sensor_unit);
 
-	
-	//Initialize new libjson JSON object
-	// json_object *j_sensor_obj         = json_object_new_object();
-	// json_object *j_sensor_value_int   = json_object_new_int(value);
-	// json_object *j_sensor_channel_int = json_object_new_int(channel);
-	// json_object *j_date_string        = json_object_new_string(date_buffer);
-
-	//Add the INT and String objects to JSON object
-	// json_object_object_add(j_sensor_obj, "Channel", j_sensor_channel_int);
-	// json_object_object_add(j_sensor_obj, "Voltage", j_sensor_value_int);
-	// json_object_object_add(j_sensor_obj, "Date", j_date_string);
-
 	//Generate path buffers (temp has a ~)
 	snprintf(path_buffer_temp, 30, "./sensor_%d~.json", channel);
 	snprintf(path_buffer, 30, "./sensor_%d.json", channel);
@@ -254,13 +259,58 @@ void free_memory() {
 }
 
 int get_current(int channel, int millivolts) {
-	return millivolts;
+	return current_multiplier[channel] * (current_max_voltage[channel] - ((double)millivolts));
 }
 
 void load_config() {
+	int i;
+	char sensor_name[20];
+	char *str = readFile();
+	cJSON *root = cJSON_Parse(str);
+	
+	for(i = 0; i < 4; i++) {
+        	sprintf(sensor_name, "current_sensor_%i", i);
 
+		
+    		cJSON *sensor = cJSON_GetObjectItem(root, sensor_name);
+
+		cJSON *max_voltage = cJSON_GetObjectItem(sensor, MAX_VOLTS);
+		cJSON *min_voltage = cJSON_GetObjectItem(sensor, MIN_VOLTS);
+		cJSON *max_current = cJSON_GetObjectItem(sensor, MAX_AMPS);
+		cJSON *min_current = cJSON_GetObjectItem(sensor, MIN_AMPS);
+		cJSON *multiplier  = cJSON_GetObjectItem(sensor, MULTIPLIER);
+		
+		current_max_voltage[i] = max_voltage->valuedouble;
+		current_min_voltage[i] = min_voltage->valuedouble;
+		current_max_current[i] = max_current->valuedouble;
+		current_min_current[i] = min_current->valuedouble;
+		current_multiplier[i]  = multiplier->valuedouble;
+	}
+	cJSON_Delete(root);
+	free(str);
 }
 
+// Function from a save file.
+// Modified for our program
+// credit: http://stackoverflow.com/questions/4823177/reading-a-file-character-by-character-in-c
+char *readFile() {
+    FILE *file = fopen("/var/tmp/sensor-config/config.json", "r");
+    char *code;
+    size_t n = 0;
+    int c;
+
+    if (file == NULL)
+        exit(1);
+
+    code = malloc(FILE_CHAR_SIZE);
+
+    while ((c = fgetc(file)) != EOF) {
+        code[n++] = (char) c;
+    }
+
+    code[n] = '\0';        
+    return code;
+}
 void init_signals() {
 	struct sigaction sa;
 	// initialize sigaction struct and signal handling
